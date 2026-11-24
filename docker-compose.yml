@@ -1,0 +1,11 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      API_USER: tester
+      API_PASSWORD: demo-password
+    volumes:
+      # The tests read the SQLite file directly for the database checks.
+      - ./data:/data

@@ -1,0 +1,63 @@
+name: API tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+
+  api-tests:
+    name: API tests against the Docker container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+
+      - name: Start the API
+        run: docker compose up --build --detach --wait
+
+      - name: Run tests
+        env:
+          API_BASE_URL: http://localhost:8000
+          DB_PATH: data/payments.db
+        run: >
+          pytest --junitxml=reports/junit.xml
+          --html=reports/report.html --self-contained-html
+
+      - name: Test summary
+        if: ${{ !cancelled() }}
+        run: python scripts/summary.py reports/junit.xml >> "$GITHUB_STEP_SUMMARY"
+
+      - name: API logs
+        if: failure()
+        run: docker compose logs api
+
+      - name: Upload HTML report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-report
+          path: reports/
+          retention-days: 14
